@@ -59,6 +59,7 @@ theta = [ theta_zero; theta_one; theta_two ]; % 3 x 1
 
 % Gradient descent
 [theta, J_history] = MyGradientDescentMulti(X_norm, y, theta, alpha, converge_margin);
+fprintf('theta: %f %f %f\n', theta(1), theta(2), theta(3));
 
 % Plot of cost
 figure;
@@ -119,11 +120,17 @@ function theta_new = MyGradientDescentMultiLMSOnce(X, y, theta, alpha)
 	theta_new = [ theta_zero; theta_one; theta_two ];
 endfunction
 
+function theta_new = MyGradientDescentMultiLMSOnce2(X, y, theta, alpha)
+	% https://github.com/emersonmoretto/mlclass-ex1/blob/master/gradientDescentMulti.m
+	m = length(y);
+	theta_new = theta - alpha * (1 / (2 * m) * (X' * X * theta - X' * y));
+endfunction
+
 function [theta_new, J_history] = MyGradientDescentMulti(X, y, theta, alpha, converge_margin)
 	cost_old = MyComputeCost(X, y, theta);
 	i = 1;
 	while (1)
-		theta = MyGradientDescentMultiLMSOnce(X, y, theta, alpha);
+		theta = MyGradientDescentMultiLMSOnce2(X, y, theta, alpha);
 		cost_new = MyComputeCost(X, y, theta);
 		J_history(i) = cost_new;
 		if (cost_old - cost_new < converge_margin)
