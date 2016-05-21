@@ -31,6 +31,7 @@ theta = [ theta_init_0; theta_init_1 ]; % 2 x 1
 
 % Gradient descent
 [theta, J_history] = MyGradientDescent(X, y, theta, alpha, converge_margin);
+fprintf("theta_0: %f theta_1: %f\n", theta(1), theta(2));
 
 % Plot of theta
 figure;
@@ -63,6 +64,8 @@ end
 J_vals = J_vals';
 
 % Surface plot
+% With linear regression, only global optima exists (no local optima)
+% Thus this should be a bowl shape
 figure;
 surf(theta0_vals, theta1_vals, J_vals)
 xlabel('\theta_0');
@@ -93,6 +96,7 @@ endfunction
 function theta_new = MyGradientDescentLMSOnce(X, y, theta, alpha)
 	% adjust theta
 	% theta(j) = theta(j) - alpha * (1/m) * sum((errors * xj)
+	% Batch gradient descent: adjust theta using entire samples
 
 	m = length(y);
 	prediction = X * theta;

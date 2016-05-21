@@ -5,8 +5,8 @@
 
 data = load('ex1data1.txt');
 
-% X: feature
-% y: target
+% X (matrix): feature
+% y (vector): target
 % m: number of training examples
 X = data(:, 1);
 y = data(:, 2);

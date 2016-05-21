@@ -6,8 +6,8 @@ function step_02()
 
 % Gradient descent
 % data file has a pair of x1 and y
-% feature: X [ x0, x1 ], x0 = 1
-% target: y
+% feature (matrix): X [ x0, x1 ], x0 = 1
+% target (vector): y
 % parameters (or weights): theta [ theta_0, theta_1 ]
 % hypothesis: h
 %   h(theta)(x) = theta_0 * x0 + theta_1 * x1
@@ -69,7 +69,10 @@ function J = MyComputeCost(X, y, theta)
 	% sum of (prediction - target) ^ 2
 	% h(theta)(x) = theta * X
 	m = length(y);
+	% X: m x 2 matrix, theta: 2 x 1 vector
+	% X * theta: m dimensional vector
 	prediction = X * theta;
+	% errors: m dimensional vector
 	errors = (prediction - y);
 	sqrErrors = errors .^ 2; % element-wise square
 	sumSqrErrors = sum(sqrErrors);
@@ -82,8 +85,8 @@ function theta_new = MyGradientDescentLMSOnce(X, y, theta, alpha)
 	% theta(j) = theta(j) - alpha * (1/m) * sum((errors * xj)
 
 	m = length(y);
-	prediction = X * theta;
-	errors = (prediction - y);
+	prediction = X * theta; % m x 1
+	errors = (prediction - y); % m x 1
 
 	% x0 = 1
 	theta_0 = theta(1) - alpha * (1 / m) * sum(errors);
