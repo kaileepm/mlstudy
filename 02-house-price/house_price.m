@@ -2,6 +2,11 @@
 
 function house_price()
 
+% hypothesis:
+% h(theta)(x) = theta0 * x0 + theta1 * x1 + theta2 * x2
+%             = [ x0 x1 x2 ] * [ theta0; theta1; theta2 ]
+%             = theta' * X (inner product)
+
 % Initial value
 theta_zero = 0;
 theta_one = 0;
@@ -24,7 +29,9 @@ ylabel('Number of rooms');
 zlabel('Price of the house');
 grid;
 
-% Normalize the features
+% Normalize the features (feature scaling)
+% - Objective: Make sure features are on a similar scale
+% - x1 has wider range (0-2000) than x2 (1-5)
 % - Subtract the mean value of each feature from the dataset.
 % - After subtracting the mean, additionally scale (divide) the feature values
 %   by their respective “standard deviations.”
@@ -122,6 +129,8 @@ endfunction
 
 function theta_new = MyGradientDescentMultiLMSOnce2(X, y, theta, alpha)
 	% https://github.com/emersonmoretto/mlclass-ex1/blob/master/gradientDescentMulti.m
+	% gradient descent
+	% theta(j) := theta(j) - alpha * (1/m) * sum (h(x) - y) * x(j)
 	m = length(y);
 	theta_new = theta - alpha * (1 / (2 * m) * (X' * X * theta - X' * y));
 endfunction
