@@ -27,6 +27,7 @@ plot3(data(:, 1), data(:, 2), y, "k.");
 xlabel('Area');
 ylabel('Number of rooms');
 zlabel('Price of the house');
+legend('Input data');
 grid;
 
 % Normalize the features (feature scaling)
@@ -57,6 +58,7 @@ plot3(X_norm(:, 1), X_norm(:, 2), y, "k.");
 xlabel('Normalized Area');
 ylabel('Normalized Number of rooms');
 zlabel('Price of the house');
+legend('Input data after feature scaling');
 grid;
 
 % Prepare for gradient descent
@@ -73,6 +75,7 @@ figure;
 plot(1:numel(J_history), J_history, "r-");
 xlabel("Iterations");
 ylabel("Cost");
+legend('Learning curve');
 
 % Prediction
 fprintf('Predicting...\n');
@@ -93,6 +96,10 @@ end
 
 figure;
 mesh(x1_space, x2_space, z_value);
+xlabel('Area');
+ylabel('Number of rooms');
+zlabel('Price of the house');
+legend('Result');
 
 function J = MyComputeCost(X, y, theta)
 	% J(theta) = (1/2m) * sum((h(theta)(x(i)) - y(i)) ^ 2)
@@ -127,19 +134,28 @@ function theta_new = MyGradientDescentMultiLMSOnce(X, y, theta, alpha)
 	theta_new = [ theta_zero; theta_one; theta_two ];
 endfunction
 
-function theta_new = MyGradientDescentMultiLMSOnce2(X, y, theta, alpha)
-	% https://github.com/emersonmoretto/mlclass-ex1/blob/master/gradientDescentMulti.m
+function theta_new = MyGradientDescentMultiLMSVectorized(X, y, theta, alpha)
+	m = length(y);
+
 	% gradient descent
 	% theta(j) := theta(j) - alpha * (1/m) * sum (h(x) - y) * x(j)
-	m = length(y);
-	theta_new = theta - alpha * (1 / (2 * m) * (X' * X * theta - X' * y));
+	% vectorized implementation
+	% theta := theta - alpha * delta
+	% delta := (1/m) * sum(h(x) - y) * x(j)
+	% h(x) = theta' * x
+	% X: m x 3 matrix, theta: 3 dimensional vector
+	% X * theta: m dimensional vector, each with h(theta)(i), i = 1 to m
+	% X * theta - y: m dimension vector, each with h(theta)i) - y
+	% X': 3 x m matrix, each row has x(j)
+	% X' * (X * theta - y): 3 dimension vector, each with sum(h(x) - y) * x(j)
+	theta_new = theta - alpha / m * (X' * (X * theta - y));
 endfunction
 
 function [theta_new, J_history] = MyGradientDescentMulti(X, y, theta, alpha, converge_margin)
 	cost_old = MyComputeCost(X, y, theta);
 	i = 1;
 	while (1)
-		theta = MyGradientDescentMultiLMSOnce2(X, y, theta, alpha);
+		theta = MyGradientDescentMultiLMSVectorized(X, y, theta, alpha);
 		cost_new = MyComputeCost(X, y, theta);
 		J_history(i) = cost_new;
 		if (cost_old - cost_new < converge_margin)
