@@ -21,13 +21,22 @@ X = [ ones(m, 1) X_norm ];
 
 % Normal equation
 theta = (pinv(X' * X)) * (X') * y;
+fprintf('With feature scaling\n');
 fprintf('theta: %f %f %f\n', theta(1), theta(2), theta(3));
 
 % Prediction
-fprintf('Predicting...\n');
 MyPredictPrint(1650, 3, theta, mu, sigma);
 MyPredictPrint(1000, 2, theta, mu, sigma);
 MyPredictPrint(2000, 4, theta, mu, sigma);
+
+% Normal equation without feature scaling
+X = [ ones(m, 1) data(:, 1:2) ];
+theta = (pinv(X' * X)) * (X') * y;
+fprintf('Without feature scaling\n');
+fprintf('theta: %f %f %f\n', theta(1), theta(2), theta(3));
+MyPredictPrintNoScaling(1650, 3, theta);
+MyPredictPrintNoScaling(1000, 2, theta);
+MyPredictPrintNoScaling(2000, 4, theta);
 
 function price = MyPredict(x1, x2, theta, mu, sigma)
 	% normalize
@@ -38,6 +47,15 @@ endfunction
 
 function MyPredictPrint(x1, x2, theta, mu, sigma)
 	price = MyPredict(x1, x2, theta, mu, sigma);
+	fprintf('Prediction for (%d, %d): %f\n', x1, x2, price);
+endfunction
+
+function price = MyPredictNoScaling(x1, x2, theta)
+	price = [ 1 x1 x2 ] * theta;
+endfunction
+
+function MyPredictPrintNoScaling(x1, x2, theta, mu, sigma)
+	price = MyPredictNoScaling(x1, x2, theta);
 	fprintf('Prediction for (%d, %d): %f\n', x1, x2, price);
 endfunction
 
