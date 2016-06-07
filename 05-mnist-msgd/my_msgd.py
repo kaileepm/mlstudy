@@ -83,6 +83,7 @@ class MyLearn:
     # Mini-batch Stochastic Gradient Descent
 
     def __init__(self, data):
+        self.epoch = 0
         self.data = data
 
     def build_model(self, learning_rate=0.1, batch_size=500):
@@ -118,13 +119,16 @@ class MyLearn:
         # Create testing (validation, test) models
         #
 
-        self.valid_model = theano.function([], self.classifier.errors(self.data.valid_set_y),
-            givens={ t_data_x: self.data.valid_set_x, t_data_y: self.data.valid_set_y })
+        self.valid_model = theano.function([t_batch_index], self.classifier.errors(t_data_y),
+            givens={ t_data_x: self.data.valid_set_x[t_batch_index * batch_size: (t_batch_index + 1) * batch_size],
+                     t_data_y: self.data.valid_set_y[t_batch_index * batch_size: (t_batch_index + 1) * batch_size] })
 
-        self.test_model = theano.function([], self.classifier.errors(self.data.test_set_y),
-            givens={ t_data_x: self.data.test_set_x, t_data_y: self.data.test_set_y })
+        self.test_model = theano.function([t_batch_index], self.classifier.errors(t_data_y),
+            givens={ t_data_x: self.data.test_set_x[t_batch_index * batch_size: (t_batch_index + 1) * batch_size],
+                     t_data_y: self.data.test_set_y[t_batch_index * batch_size: (t_batch_index + 1) * batch_size] })
 
     def train_once(self):
+        self.epoch += 1
         batch_count = self.data.n_train / self.batch_size
 
         for batch_index in range(batch_count):
@@ -132,33 +136,46 @@ class MyLearn:
 
         return gd_cost
 
+    def train_multiple(self, n_epoch):
+        for epoch in range(n_epoch):
+            gd_cost = self.train_once()
+            print("{}: {}".format(self.epoch, gd_cost))
+
     def train_until_converge(self, target_diff):
-        epoch = 1
         old_cost = self.train_once()
+        print("{}: {}".format(self.epoch, old_cost))
 
         while True:
             new_cost = self.train_once()
-            print("{}: {}".format(epoch, new_cost))
+            print("{}: {}".format(self.epoch, new_cost))
 
             if old_cost - new_cost < target_diff:
                 print("Converged")
                 break
 
-            epoch += 1
             old_cost = new_cost
 
-    def train_multiple(self, n_epoch):
-        for epoch in range(n_epoch):
-            gd_cost = self.train_once()
-            print("{}: {}".format(epoch, gd_cost))
-
     def validate(self):
-        errors = self.valid_model()
-        print("Validation: {}".format(errors))
+        batch_count = self.data.n_valid / self.batch_size
+
+        errors = 0
+        for batch_index in range(batch_count):
+            errors += self.valid_model(batch_index)
+
+        errors /= batch_count
+        errors *= 100.
+        print("Validation: {0:.2f}%".format(errors))
 
     def test(self):
-        errors = self.test_model()
-        print("Test: {}".format(errors))
+        batch_count = self.data.n_test / self.batch_size
+
+        errors = 0
+        for batch_index in range(batch_count):
+            errors += self.test_model(batch_index)
+
+        errors /= batch_count
+        errors *= 100.
+        print("Test: {0:.2f}%".format(errors))
 
 def main():
     print("Loading data...")
@@ -172,7 +189,7 @@ def main():
     mm.build_model()
 
     print("Training...")
-    if False:
+    if True:
         for i in range(10):
             mm.train_multiple(10)
             mm.validate()
