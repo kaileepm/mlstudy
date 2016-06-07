@@ -158,11 +158,22 @@ class MyLearn:
     # Mini-batch Stochastic Gradient Descent
 
     def __init__(self, data):
+        self.epoch = 0
         self.data = data
 
     def build_model(self, learning_rate=0.1, batch_size=500, nkerns=[20, 50]):
         #
-        # Create a training model
+        # CNN architecture
+        #
+        # input: 28x28x1
+        # convolution (layer0): 24x24
+        # max pooling (layer0): 12x12
+        # activation (layer0)
+        # convolution (layer1): 8x8
+        # max pooling (layer1): 4x4
+        # activation (layer1)
+        # full connect (layer2): 500 outputs
+        # full connect (layer3): logistic regression (softmax), 10 outputs
         #
 
         rng = np.random.RandomState(23455)
@@ -249,6 +260,7 @@ class MyLearn:
                      t_data_y: self.data.test_set_y[t_batch_index * batch_size: (t_batch_index + 1) * batch_size] })
 
     def train_once(self):
+        self.epoch += 1
         batch_count = self.data.n_train / self.batch_size
 
         for batch_index in range(batch_count):
@@ -256,25 +268,24 @@ class MyLearn:
 
         return gd_cost
 
+    def train_multiple(self, n_epoch):
+        for epoch in range(n_epoch):
+            gd_cost = self.train_once()
+            print("{}: {}".format(self.epoch, gd_cost))
+
     def train_until_converge(self, target_diff):
-        epoch = 1
         old_cost = self.train_once()
+        print("{}: {}".format(self.epoch, old_cost))
 
         while True:
             new_cost = self.train_once()
-            print("{}: {}".format(epoch, new_cost))
+            print("{}: {}".format(self.epoch, new_cost))
 
             if old_cost - new_cost < target_diff:
                 print("Converged")
                 break
 
-            epoch += 1
             old_cost = new_cost
-
-    def train_multiple(self, n_epoch):
-        for epoch in range(n_epoch):
-            gd_cost = self.train_once()
-            print("{}: {}".format(epoch, gd_cost))
 
     def validate(self):
         batch_count = self.data.n_valid / self.batch_size
