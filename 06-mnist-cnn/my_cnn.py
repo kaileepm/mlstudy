@@ -3,15 +3,16 @@
 import numpy as np
 import theano
 from theano import tensor as T
+from theano.tensor.signal import downsample
 import cPickle
 import gzip
 
 class LogisticRegression(object):
     def __init__(self, t_data_x, n_x, n_y):
         # Weights
-        self.W = theano.shared(np.zeros((n_x, n_y), dtype='float64'), borrow=True)
+        self.W = theano.shared(np.zeros((n_x, n_y), theano.config.floatX), borrow=True)
         # Bias
-        self.b = theano.shared(np.zeros((n_y), dtype='float64'), borrow=True)
+        self.b = theano.shared(np.zeros((n_y), dtype=theano.config.floatX), borrow=True)
         # the probability that an input vector x is a member of class i
         # P(Y = i|x,W,b) = softmax(Wx + b)
         self.p_y_given_x = T.nnet.softmax(T.dot(t_data_x, self.W) + self.b)
@@ -37,8 +38,8 @@ class MNISTData:
 
         # make shared variables for GPU.
         # for GPU, the data type should be float
-        shared_data_x = theano.shared(np.asarray(data_x, dtype='float64'))
-        shared_data_y = theano.shared(np.asarray(data_y, dtype='float64'))
+        shared_data_x = theano.shared(np.asarray(data_x, dtype=theano.config.floatX))
+        shared_data_y = theano.shared(np.asarray(data_y, dtype=theano.config.floatX))
 
         # for calculation, y should be integer
         return shared_data_x, T.cast(shared_data_y, 'int32')
@@ -93,9 +94,17 @@ class LeNetConvPoolLayer(object):
         # image_shape: (batch size, number of input feature maps, height, width)
         # poolsize: (# rows, # columns)
 
-        self.W = theano.shared(np.asarray(rng.uniform(size=filter_shape), dtype=theano.config.floatX), borrow=True)
-        self.b = theano.shared(np.zeros((filter_shape[0],), dtype=theano.config.floatX), borrow=True)
+        # calculate the range of random number
+        fan_in = np.prod(filter_shape[1:])
+        fan_out = (filter_shape[0] * np.prod(filter_shape[2:]) // np.prod(poolsize))
+        W_bound = np.sqrt(6. / (fan_in + fan_out))
 
+        # parameters
+        self.W = theano.shared(np.asarray(rng.uniform(low=-W_bound, high=W_bound, size=filter_shape), dtype=theano.config.floatX), borrow=True)
+        self.b = theano.shared(np.zeros((filter_shape[0],), dtype=theano.config.floatX), borrow=True)
+        self.params = [ self.W, self.b ]
+
+        # convolution layer
         conv_out = T.nnet.conv2d(
             input=input,
             filters=self.W,
@@ -103,23 +112,23 @@ class LeNetConvPoolLayer(object):
             image_shape=image_shape
         )
 
+        # pooling layer
         pooled_out = T.signal.downsample.max_pool_2d(
             input=conv_out,
             ds=poolsize,
             ignore_border=True
         )
 
+        # activation function
         self.output = T.tanh(pooled_out + self.b.dimshuffle('x', 0, 'x', 'x'))
-        self.params = [ self.W, self.b ]
 
 class HiddenLayer(object):
-    def __init__(self, rng, input, n_in, n_out, W=None, b=None,
-                 activation=T.tanh):
+    def __init__(self, rng, input, n_in, n_out, W=None, b=None, activation=T.tanh):
         if W is None:
-            W_values = numpy.asarray(
+            W_values = np.asarray(
                 rng.uniform(
-                    low=-numpy.sqrt(6. / (n_in + n_out)),
-                    high=numpy.sqrt(6. / (n_in + n_out)),
+                    low=-np.sqrt(6. / (n_in + n_out)),
+                    high=np.sqrt(6. / (n_in + n_out)),
                     size=(n_in, n_out)
                 ),
                 dtype=theano.config.floatX
@@ -130,7 +139,7 @@ class HiddenLayer(object):
             W = theano.shared(value=W_values, name='W', borrow=True)
 
         if b is None:
-            b_values = numpy.zeros((n_out,), dtype=theano.config.floatX)
+            b_values = np.zeros((n_out,), dtype=theano.config.floatX)
             b = theano.shared(value=b_values, name='b', borrow=True)
 
         self.W = W
@@ -142,7 +151,7 @@ class HiddenLayer(object):
             else activation(lin_output)
         )
 
-        self.parmams = [ self.W, self.b ]
+        self.params = [ self.W, self.b ]
 
 class MyLearn:
     # Logistic regression for multiple classification
@@ -205,8 +214,8 @@ class MyLearn:
             activation=T.tanh
         )
 
-        self.classifier = LogisticRegression(layer2.output, 500, self.data.k)
-        cost = self.classifier.negative_log_likelihood(t_data_y)
+        layer3 = LogisticRegression(layer2.output, 500, self.data.k)
+        cost = layer3.negative_log_likelihood(t_data_y)
 
         params = layer3.params + layer2.params + layer1.params + layer0.params
         grads = T.grad(cost, params)
@@ -216,25 +225,28 @@ class MyLearn:
             for param_i, grad_i in zip(params, grads)
         ]
 
-        train_model = theano.function(
-            [index],
+        self.train_model = theano.function(
+            [t_batch_index],
             cost,
             updates=updates,
             givens={
-                t_data_x: self.data.train_set_x[t_batch_index * batch_size: (index + 1) * batch_size],
-                t_data_y: self.data.train_set_y[t_batch_index * batch_size: (index + 1) * batch_size]
+                t_data_x: self.data.train_set_x[t_batch_index * batch_size: (t_batch_index + 1) * batch_size],
+                t_data_y: self.data.train_set_y[t_batch_index * batch_size: (t_batch_index + 1) * batch_size]
             }
         )
+
+        self.classifier = layer3
 
         #
         # Create testing (validation, test) models
         #
+        self.valid_model = theano.function([t_batch_index], self.classifier.errors(t_data_y),
+            givens={ t_data_x: self.data.valid_set_x[t_batch_index * batch_size: (t_batch_index + 1) * batch_size],
+                     t_data_y: self.data.valid_set_y[t_batch_index * batch_size: (t_batch_index + 1) * batch_size] })
 
-        self.valid_model = theano.function([], self.classifier.errors(self.data.valid_set_y),
-            givens={ t_data_x: self.data.valid_set_x, t_data_y: self.data.valid_set_y })
-
-        self.test_model = theano.function([], self.classifier.errors(self.data.test_set_y),
-            givens={ t_data_x: self.data.test_set_x, t_data_y: self.data.test_set_y })
+        self.test_model = theano.function([t_batch_index], self.classifier.errors(t_data_y),
+            givens={ t_data_x: self.data.test_set_x[t_batch_index * batch_size: (t_batch_index + 1) * batch_size],
+                     t_data_y: self.data.test_set_y[t_batch_index * batch_size: (t_batch_index + 1) * batch_size] })
 
     def train_once(self):
         batch_count = self.data.n_train / self.batch_size
@@ -265,12 +277,26 @@ class MyLearn:
             print("{}: {}".format(epoch, gd_cost))
 
     def validate(self):
-        errors = self.valid_model()
-        print("Validation: {}".format(errors))
+        batch_count = self.data.n_valid / self.batch_size
+
+        errors = 0
+        for batch_index in range(batch_count):
+            errors += self.valid_model(batch_index)
+
+        errors /= batch_count
+        errors *= 100.
+        print("Validation: {0:.2f}%".format(errors))
 
     def test(self):
-        errors = self.test_model()
-        print("Test: {}".format(errors))
+        batch_count = self.data.n_test / self.batch_size
+
+        errors = 0
+        for batch_index in range(batch_count):
+            errors += self.test_model(batch_index)
+
+        errors /= batch_count
+        errors *= 100.
+        print("Test: {0:.2f}%".format(errors))
 
 def main():
     print("Loading data...")
@@ -284,12 +310,13 @@ def main():
     mm.build_model()
 
     print("Training...")
-    if False:
-        for i in range(10):
-            mm.train_multiple(10)
-            mm.validate()
-
     if True:
+        for i in range(100):
+            mm.train_multiple(1)
+            mm.validate()
+            mm.test()
+
+    if False:
         mm.train_until_converge(0.0001)
         mm.validate()
 
