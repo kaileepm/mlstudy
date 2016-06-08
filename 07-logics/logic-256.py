@@ -42,11 +42,12 @@ class MyLearn(object):
     def __init__(self):
         self.epoch = 0
 
-    def build_model(self, data, learning_rate=0.0001, batch_size=256):
+    def build_model(self, data, batch_size=256):
         # create a neural network
         rng = np.random.RandomState(7919)
         t_X = T.matrix(dtype=theano.config.floatX)
         t_y = T.vector(dtype=theano.config.floatX)
+	t_learning_rate = T.scalar(dtype=theano.config.floatX)
 
         layer1 = NNLayer(rng, t_X, 8, 256, T.nnet.relu)
         layer2 = NNLayer(rng, layer1.output, 256, 256, T.nnet.relu)
@@ -58,12 +59,12 @@ class MyLearn(object):
         grads = T.grad(cost, params)
 
         updates = [
-            (param_i, param_i - learning_rate * grad_i)
+            (param_i, param_i - t_learning_rate * grad_i)
             for param_i, grad_i in zip(params, grads)
         ]
 
         self.train_model = theano.function(
-            [ ],
+            [ t_learning_rate ],
             cost,
             updates=updates,
             givens={
@@ -75,17 +76,24 @@ class MyLearn(object):
         # evaluation function
         self.forward = theano.function([ t_X ], output)
 
-    def train_once(self):
+    def train_once(self, learning_rate):
         self.epoch += 1
-        gd_cost = self.train_model()
+        gd_cost = self.train_model(learning_rate)
         print("{}: {}".format(self.epoch, gd_cost))
         return gd_cost
 
     def train_until_converge(self, target_cost):
-        old_cost = self.train_once()
+	learning_rate = 1. / 4096
+	print("Learning rate is {}".format(learning_rate))
+        old_cost = self.train_once(learning_rate)
 
         while True:
-            new_cost = self.train_once()
+            new_cost = self.train_once(learning_rate)
+            if new_cost > old_cost:
+                # overshooting
+                print("Adjust learning rate")
+	        learning_rate /= 2.
+		print("Learning rate is {}".format(learning_rate))
             if new_cost < target_cost:
                 # print("Met target")
                 break
