@@ -7,27 +7,12 @@ from theano.tensor.signal import downsample
 import cPickle
 import gzip
 
-class LogisticRegression(object):
-    def __init__(self, t_data_x, n_x, n_y):
-        # Weights
-        self.W = theano.shared(np.zeros((n_x, n_y), theano.config.floatX), borrow=True)
-        # Bias
-        self.b = theano.shared(np.zeros((n_y), dtype=theano.config.floatX), borrow=True)
-        # the probability that an input vector x is a member of class i
-        # P(Y = i|x,W,b) = softmax(Wx + b)
-        self.p_y_given_x = T.nnet.softmax(T.dot(t_data_x, self.W) + self.b)
-        # prediction is the class whose probability is maximal
-        self.y_pred = T.argmax(self.p_y_given_x, axis=1)
-        # parameter list
-        self.params = [ self.W, self.b ]
-
-    def negative_log_likelihood(self, t_data_y):
-        # cost function
-        return -T.mean(T.log(self.p_y_given_x)[T.arange(t_data_y.shape[0]), t_data_y])
-
-    def errors(self, t_data_y):
-        # error rates
-        return T.mean(T.neq(self.y_pred, t_data_y))
+if __name__ == '__main__':
+    if __package__ is None:
+        import sys
+        from os import path
+        sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+        from shared.my_ml import *
 
 class MNISTData:
     def __init__(self):
@@ -122,37 +107,6 @@ class LeNetConvPoolLayer(object):
         # activation function
         self.output = T.tanh(pooled_out + self.b.dimshuffle('x', 0, 'x', 'x'))
 
-class HiddenLayer(object):
-    def __init__(self, rng, input, n_in, n_out, W=None, b=None, activation=T.tanh):
-        if W is None:
-            W_values = np.asarray(
-                rng.uniform(
-                    low=-np.sqrt(6. / (n_in + n_out)),
-                    high=np.sqrt(6. / (n_in + n_out)),
-                    size=(n_in, n_out)
-                ),
-                dtype=theano.config.floatX
-            )
-            if activation == theano.tensor.nnet.sigmoid:
-                W_values *= 4
-
-            W = theano.shared(value=W_values, name='W', borrow=True)
-
-        if b is None:
-            b_values = np.zeros((n_out,), dtype=theano.config.floatX)
-            b = theano.shared(value=b_values, name='b', borrow=True)
-
-        self.W = W
-        self.b = b
-
-        lin_output = T.dot(input, self.W) + self.b
-        self.output = (
-            lin_output if activation is None
-            else activation(lin_output)
-        )
-
-        self.params = [ self.W, self.b ]
-
 class MyLearn:
     # Logistic regression for multiple classification
     # Mini-batch Stochastic Gradient Descent
@@ -217,7 +171,7 @@ class MyLearn:
 
         layer2_input = layer1.output.flatten(2)
 
-        layer2 = HiddenLayer(
+        layer2 = NeuralNetworkLayer(
             rng,
             input=layer2_input,
             n_in=nkerns[1] * 4 * 4,
@@ -225,7 +179,7 @@ class MyLearn:
             activation=T.tanh
         )
 
-        layer3 = LogisticRegression(layer2.output, 500, self.data.k)
+        layer3 = LogisticRegressionMultiClass(layer2.output, 500, self.data.k)
         cost = layer3.negative_log_likelihood(t_data_y)
 
         params = layer3.params + layer2.params + layer1.params + layer0.params
