@@ -2,6 +2,13 @@ import numpy as np
 import theano
 from theano import tensor as T
 
+if __name__ == '__main__':
+    if __package__ is None:
+        import sys
+        from os import path
+        sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+        from shared.my_ml import *
+
 class LogicData(object):
     def __init__(self):
         data_X = np.zeros((256, 8), dtype=theano.config.floatX)
@@ -21,23 +28,6 @@ class LogicData(object):
         self.test_X = data_X
         self.test_y = data_y
 
-class NNLayer(object):
-    def __init__(self, rng, input, n_in, n_out, activation=None):
-        w_bound = np.sqrt(6. / (n_in + n_out + 1))
-        w_value = np.asarray(rng.uniform(size=(n_in, n_out), low=-w_bound, high=w_bound), dtype=theano.config.floatX)
-        b_value = np.zeros((n_out), dtype=theano.config.floatX)
-
-        # create shared variables
-        self.W = theano.shared(w_value, borrow=True)
-        self.b = theano.shared(b_value, borrow=True)
-        self.params = [ self.W, self.b ]
-
-        # output
-        output = T.dot(input, self.W) + self.b
-        if activation != None:
-            output = activation(output)
-        self.output = output
-
 class MyLearn(object):
     def __init__(self):
         self.epoch = 0
@@ -49,9 +39,9 @@ class MyLearn(object):
         t_y = T.vector(dtype=theano.config.floatX)
 	t_learning_rate = T.scalar(dtype=theano.config.floatX)
 
-        layer1 = NNLayer(rng, t_X, 8, 256, T.nnet.relu)
-        layer2 = NNLayer(rng, layer1.output, 256, 256, T.nnet.relu)
-        layer3 = NNLayer(rng, layer2.output, 256, 1, T.nnet.relu)
+        layer1 = NeuralNetworkLayer(rng, t_X, 8, 256, T.nnet.relu)
+        layer2 = NeuralNetworkLayer(rng, layer1.output, 256, 256, T.nnet.relu)
+        layer3 = NeuralNetworkLayer(rng, layer2.output, 256, 1, T.nnet.relu)
         output = T.cast((layer3.output + 0.5), 'int32')
 
         cost = T.sum((layer3.output - t_y.reshape((batch_size, 1))) ** 2)

@@ -2,6 +2,13 @@ import numpy as np
 import theano
 from theano import tensor as T
 
+if __name__ == '__main__':
+    if __package__ is None:
+        import sys
+        from os import path
+        sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+        from shared.my_ml import *
+
 class LogicData(object):
     def __init__(self, logic):
         # find logic handler
@@ -60,29 +67,6 @@ class LogicData(object):
     def logic_xnor(self, d1, d2):
         return 0 if (d1 ^ d2) else 1
 
-class NNLayer(object):
-    def __init__(self, rng, input, n_in, n_out, activation=None):
-        # weight initialization
-        # Xavier Glorot, Yoshua Bengio
-        # normalized initialization: sqrt(6 / (n_in + n_out + 1))
-        w_bound = np.sqrt(6. / (n_in + n_out + 1))
-        w_value = np.asarray(rng.uniform(size=(n_in, n_out), low=-w_bound, high=w_bound), dtype=theano.config.floatX)
-
-        # bias initialization
-        # zeroed out
-        b_value = np.zeros((n_out), dtype=theano.config.floatX)
-
-        # create shared variables
-        self.W = theano.shared(w_value, borrow=True)
-        self.b = theano.shared(b_value, borrow=True)
-        self.params = [ self.W, self.b ]
-
-        # output
-        output = T.dot(input, self.W) + self.b
-        if activation != None:
-            output = activation(output)
-        self.output = output
-
 class MyLearn(object):
     def __init__(self):
         self.epoch = 0
@@ -93,8 +77,8 @@ class MyLearn(object):
         t_X = T.matrix(dtype=theano.config.floatX)
         t_y = T.vector(dtype=theano.config.floatX)
 
-        layer1 = NNLayer(rng, t_X, 2, 2, T.nnet.relu)
-        layer2 = NNLayer(rng, layer1.output, 2, 1, T.nnet.relu)
+        layer1 = NeuralNetworkLayer(rng, t_X, 2, 2, T.nnet.relu)
+        layer2 = NeuralNetworkLayer(rng, layer1.output, 2, 1, T.nnet.relu)
         output = T.cast((layer2.output + 0.5), 'int32')
 
         # training function
