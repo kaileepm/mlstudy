@@ -6,25 +6,12 @@ from theano import tensor as T
 import cPickle
 import gzip
 
-class LogisticRegression(object):
-    def __init__(self, t_data_x, n_x, n_y):
-        # Weights
-        self.W = theano.shared(np.zeros((n_x, n_y), dtype='float64'), borrow=True)
-        # Bias
-        self.b = theano.shared(np.zeros((n_y), dtype='float64'), borrow=True)
-        # the probability that an input vector x is a member of class i
-        # P(Y = i|x,W,b) = softmax(Wx + b)
-        self.p_y_given_x = T.nnet.softmax(T.dot(t_data_x, self.W) + self.b)
-        # prediction is the class whose probability is maximal
-        self.y_pred = T.argmax(self.p_y_given_x, axis=1)
-
-    def negative_log_likelihood(self, t_data_y):
-        # cost function
-        return -T.mean(T.log(self.p_y_given_x)[T.arange(t_data_y.shape[0]), t_data_y])
-
-    def errors(self, t_data_y):
-        # error rates
-        return T.mean(T.neq(self.y_pred, t_data_y))
+if __name__ == '__main__':
+    if __package__ is None:
+        import sys
+        from os import path
+        sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+        from shared.my_ml import *
 
 class MNISTData:
     def __init__(self):
@@ -35,11 +22,11 @@ class MNISTData:
 
         # make shared variables for GPU.
         # for GPU, the data type should be float
-        shared_data_x = theano.shared(np.asarray(data_x, dtype='float64'))
-        shared_data_y = theano.shared(np.asarray(data_y, dtype='float64'))
+        shared_data_x = theano.shared(np.asarray(data_x, dtype=theano.config.floatX))
+        shared_data_y = theano.shared(np.asarray(data_y, dtype=theano.config.floatX))
 
         # for calculation, y should be integer
-        return shared_data_x, T.cast(shared_data_y, 'int32')
+        return shared_data_x, T.cast(shared_data_y, 'int32'), data_x, data_y
 
     def load_data(self):
         #
@@ -58,7 +45,7 @@ class MNISTData:
         # 784: 28x28
         # classification: 10 possible outputs
         self.n_x = train_set[0].shape[1]
-        self.k = 10
+        self.n_class = 10
 
         self.n_train = len(train_set[0])
         self.n_valid = len(valid_set[0])
@@ -72,9 +59,9 @@ class MNISTData:
         # Create shared variables to make use of GPUs
         #
 
-        self.train_set_x, self.train_set_y = self.make_shared(train_set)
-        self.valid_set_x, self.valid_set_y = self.make_shared(valid_set)
-        self.test_set_x, self.test_set_y = self.make_shared(test_set)
+        self.train_set_x, self.train_set_y, self.train_np_x, self.train_np_y  = self.make_shared(train_set)
+        self.valid_set_x, self.valid_set_y, self.valid_np_x, self.valid_np_y = self.make_shared(valid_set)
+        self.test_set_x, self.test_set_y, self.test_np_x, self.test_np_y = self.make_shared(test_set)
 
         return True
 
@@ -103,21 +90,32 @@ class MyLearn:
         t_data_x = T.matrix()
         t_data_y = T.ivector()
 
-        self.classifier = LogisticRegression(t_data_x, self.data.n_x, self.data.k)
+        self.classifier = LogisticRegressionMultiClass(t_data_x, self.data.n_x, self.data.n_class)
         cost = self.classifier.negative_log_likelihood(t_data_y)
 
-        grad_W = T.grad(cost, self.classifier.W)
-        grad_b = T.grad(cost, self.classifier.b)
+        params = self.classifier.params
+        grads = T.grad(cost, params)
 
-        self.train_model = theano.function([t_batch_index], cost,
+        updates = [
+            (param_i, param_i - learning_rate * grad_i)
+            for param_i, grad_i in zip(params, grads)
+        ]
+
+        if False: # initial implementation
+            grad_W = T.grad(cost, self.classifier.W)
+            grad_b = T.grad(cost, self.classifier.b)
             updates=[ (self.classifier.W, self.classifier.W - learning_rate * grad_W),
-                      (self.classifier.b, self.classifier.b - learning_rate * grad_b) ],
+                (self.classifier.b, self.classifier.b - learning_rate * grad_b) ],
+
+        self.train_model = theano.function([t_batch_index], cost, updates=updates,
             givens={ t_data_x: self.data.train_set_x[t_batch_index * batch_size : (t_batch_index + 1) * batch_size],
                      t_data_y: self.data.train_set_y[t_batch_index * batch_size : (t_batch_index + 1) * batch_size] })
 
         #
         # Create testing (validation, test) models
         #
+
+        self.forward_model = theano.function([t_data_x], self.classifier.output)
 
         self.valid_model = theano.function([t_batch_index], self.classifier.errors(t_data_y),
             givens={ t_data_x: self.data.valid_set_x[t_batch_index * batch_size: (t_batch_index + 1) * batch_size],
@@ -177,6 +175,9 @@ class MyLearn:
         errors *= 100.
         print("Test: {0:.2f}%".format(errors))
 
+    def forward(self, data_X):
+        return self.forward_model(data_X)
+
 def main():
     print("Loading data...")
     data = MNISTData()
@@ -200,6 +201,10 @@ def main():
 
     print("Testing...")
     mm.test()
+
+    print("Testing forward...")
+    y = mm.forward(data.test_np_x)
+    print(y)
 
 if __name__ == "__main__":
     main()
