@@ -32,14 +32,7 @@ class MyData(object):
         for idx in range(n_i_begin, 1 << n_bits):
             for j in range(n_bits):
                 data_X[i][j] = (i >> j) & 1
-            if i % 15 == 0:
-                data_y[i] = 3
-            elif i % 3 == 0:
-                data_y[i] = 2
-            elif i % 5 == 0:
-                data_y[i] = 1
-            else:
-                data_y[i] = 0
+            data_y[i] = self.fizzbuzz(i)
             i += 1
 
         # create shared tensors of (X, y)
@@ -60,20 +53,23 @@ class MyData(object):
         for i in range(100):
             for j in range(n_bits):
                 self.test_data_X[i][j] = (i >> j) & 1
-            if i % 15 == 0:
-                self.test_data_y[i] = 3
-            elif i % 3 == 0:
-                self.test_data_y[i] = 2
-            elif i % 5 == 0:
-                self.test_data_y[i] = 1
-            else:
-                self.test_data_y[i] = 0
+            self.test_data_y[i] = self.fizzbuzz(i)
+
+    def fizzbuzz(self, i):
+        if i % 15 == 0:
+            return 3
+        elif i % 3 == 0:
+            return 2
+        elif i % 5 == 0:
+            return 1
+        else:
+            return 0
 
 class MyLearn(object):
     def __init__(self):
         self.epoch = 0
 
-    def build_model(self, data, batch_size=256):
+    def build_model(self, data):
         # create a neural network
         rng = np.random.RandomState(7919)
         t_X = T.matrix(dtype=theano.config.floatX)
@@ -162,7 +158,7 @@ def main():
 
     print("Creating NN")
     mml = MyLearn()
-    mml.build_model(data, batch_size = data.n_data)
+    mml.build_model(data)
 
     print("Training...")
     cost = mml.train_until_converge(cost_target)
