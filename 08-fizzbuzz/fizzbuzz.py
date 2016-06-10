@@ -1,65 +1,73 @@
+#!/usr/bin/env python
+
 import numpy as np
 import theano
 from theano import tensor as T
 
+if __name__ == '__main__':
+    if __package__ is None:
+        import sys
+        from os import path
+        sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+        from shared.my_ml import *
+
+#
+# FizzBuzz Neural Network + Multi-class Logistic Regression
+#
+
 class MyData(object):
     def __init__(self):
-        n_data = 1024
-        data_X = np.zeros((n_data, 1), dtype=theano.config.floatX)
+        n_i_begin = 100
+        n_bits = 10
+        n_data = (1 << n_bits) - n_i_begin
+        n_class = 4
+
+        # data_X: matrix with shape (n_data, n_bits)
+        # data_y: vector (n_data)
+        data_X = np.zeros((n_data, n_bits), dtype=theano.config.floatX)
         data_y = np.zeros((n_data,), dtype=theano.config.floatX)
 
         # build X, y
-        for i in range(n_data):
-            data_X[i][0] = i
+        i = 0
+        for idx in range(n_i_begin, 1 << n_bits):
+            for j in range(n_bits):
+                data_X[i][j] = (i >> j) & 1
             if i % 15 == 0:
                 data_y[i] = 3
             elif i % 3 == 0:
-                data_y[i] = 1
-            elif i % 5 == 0:
                 data_y[i] = 2
+            elif i % 5 == 0:
+                data_y[i] = 1
+            else:
+                data_y[i] = 0
+            i += 1
 
         # create shared tensors of (X, y)
         self.data_X = theano.shared(np.asarray(data_X, dtype=theano.config.floatX), borrow=True)
-        self.shared_data_y = theano.shared(np.asarray(data_y, dtype=theano.config.floatX), borrow=True)
-        self.data_y = T.cast(self.shared_data_y, 'int32')
+        self.data_y_float = theano.shared(np.asarray(data_y, dtype=theano.config.floatX), borrow=True)
+        self.data_y = T.cast(self.data_y_float, 'int32')
 
         # save information
-        self.test_X = data_X
-        self.test_y = data_y
+        self.np_data_X = data_X
+        self.np_data_y = data_y
+        self.n_bits = n_bits
         self.n_data = n_data
-        self.k = 4
+        self.n_class = n_class
 
-class NNLayer(object):
-    def __init__(self, rng, input, n_in, n_out, activation=None):
-        # weights and bias
-        w_bound = np.sqrt(6. / (n_in + n_out + 1))
-        w_value = np.asarray(rng.uniform(size=(n_in, n_out), low=-w_bound, high=w_bound), dtype=theano.config.floatX)
-        b_value = np.zeros((n_out), dtype=theano.config.floatX)
-
-        # create shared variables
-        self.W = theano.shared(w_value, borrow=True)
-        self.b = theano.shared(b_value, borrow=True)
-        self.params = [ self.W, self.b ]
-
-        # output
-        output = T.dot(input, self.W) + self.b
-        if activation != None:
-            output = activation(output)
-        self.output = output
-
-class LogisticRegression(object):
-    def __init__(self, t_X, n_x, n_y):
-        self.W = theano.shared(np.zeros((n_x, n_y), dtype=theano.config.floatX), borrow=True)
-        self.b = theano.shared(np.zeros((n_y), dtype=theano.config.floatX), borrow=True)
-        self.p_y_given_x = T.nnet.softmax(T.dot(t_X, self.W) + self.b)
-        self.output = T.argmax(self.p_y_given_x, axis=1)
-        self.params = [ self.W, self.b ]
-
-    def negative_log_likelihood(self, t_y):
-        return -T.mean(T.log(self.p_y_given_x)[T.arange(t_y.shape[0]), t_y])
-
-    def errors(self, t_y):
-        return T.mean(T.neq(self.output, t_y))
+        # test data
+        self.test_data_X = np.zeros((100, n_bits), dtype=theano.config.floatX)
+        self.test_data_y = np.zeros((100,), dtype=theano.config.floatX)
+        for i in range(100):
+            for j in range(n_bits):
+                self.test_data_X[i][j] = (i >> j) & 1
+            if i % 15 == 0:
+                self.test_data_y[i] = 3
+            elif i % 3 == 0:
+                self.test_data_y[i] = 2
+            elif i % 5 == 0:
+                self.test_data_y[i] = 1
+            else:
+                self.test_data_y[i] = 0
 
 class MyLearn(object):
     def __init__(self):
@@ -72,14 +80,13 @@ class MyLearn(object):
         t_y = T.ivector()
         t_learning_rate = T.scalar(dtype=theano.config.floatX)
 
-        layer1 = NNLayer(rng, t_X, 1, 256, T.nnet.relu)
-#        layer2 = NNLayer(rng, layer1.output, 256, 256, T.nnet.relu)
-#        layer3 = NNLayer(rng, layer2.output, 256, 256, T.nnet.relu)
-        layer4 = LogisticRegression(layer1.output, 256, 4)
+        layer1 = NeuralNetworkLayer(rng, t_X, data.n_bits, 256, T.nnet.relu)
+        layer2 = NeuralNetworkLayer(rng, layer1.output, 256, 256, T.nnet.relu)
+        layer3 = LogisticRegressionMultiClass(layer2.output, 256, data.n_class)
 
-        cost = layer4.negative_log_likelihood(t_y)
-#        params = layer4.params + layer3.params + layer2.params + layer1.params
-        params = layer4.params + layer1.params
+        # create training model
+        cost = layer3.negative_log_likelihood(t_y)
+        params = layer3.params + layer2.params + layer1.params
         grads = T.grad(cost, params)
 
         updates = [
@@ -97,17 +104,34 @@ class MyLearn(object):
             }
         )
 
-        # evaluation function
-        # self.forward = theano.function([ t_X ], output)
+        # forward model
+        self.forward_model = theano.function([ t_X ], layer3.output)
+
+        # validation
+        self.test_model = theano.function([], layer3.errors(t_y),
+            givens={
+                t_X: data.data_X,
+                t_y: data.data_y,
+            }
+        )
+
+    def validate(self):
+        errors = self.test_model()
+        print("Validation error: {}".format(errors))
+
+    def predict(self, data_X):
+        return self.forward_model(data_X)
 
     def train_once(self, learning_rate):
+        if self.epoch % 100 == 0:
+            self.validate()
         self.epoch += 1
         gd_cost = self.train_model(learning_rate)
-        print("{}: {}".format(self.epoch, gd_cost))
+        # print("{}: {}".format(self.epoch, gd_cost))
         return gd_cost
 
     def train_until_converge(self, target_cost):
-        learning_rate = 1. / 2
+        learning_rate = 1. / 8
         print("Learning rate is {}".format(learning_rate))
         old_cost = self.train_once(learning_rate)
 
@@ -115,9 +139,10 @@ class MyLearn(object):
             new_cost = self.train_once(learning_rate)
             if new_cost > old_cost:
                 # overshooting
-                print("Adjust learning rate")
-                learning_rate /= 2.
-                print("Learning rate is {}".format(learning_rate))
+                # print("Adjust learning rate")
+                # learning_rate /= 2.
+                # print("Learning rate is {}".format(learning_rate))
+                None
             if new_cost < target_cost:
                 # print("Met target")
                 break
@@ -128,15 +153,6 @@ class MyLearn(object):
             old_cost = new_cost
 
         return new_cost
-
-    def predict(self, data_X):
-        None
-        # return self.forward(data_X)
-
-    def test(self, data):
-        None
-        # y = self.predict(data.test_X)
-        # print(y.reshape(1, 256))
 
 def main():
     cost_target = 0.001
@@ -152,6 +168,21 @@ def main():
     cost = mml.train_until_converge(cost_target)
     if cost >= cost_target:
         print("  Failed")
+
+    print("Validating...")
+    mml.validate()
+
+    print("Test...")
+    y = mml.predict(data.test_data_X)
+
+    fizzbuzz = [ "", "fizz", "buzz", "fizzbuzz" ]
+    wrong = 0
+    for i in range(100):
+        print("{}: {} {}".format(i, i if y[i] == 0 else fizzbuzz[y[i]], "WRONG" if y[i] != data.test_data_y[i] else ""))
+        if y[i] != data.test_data_y[i]:
+            wrong += 1
+
+    print("Got {} wrong answers.".format(wrong))
 
 if __name__ == "__main__":
     main()
