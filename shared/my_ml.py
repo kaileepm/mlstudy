@@ -7,14 +7,17 @@ from theano import tensor as T
 #
 
 class LogisticRegressionMultiClass(object):
-    def __init__(self, t_X, n_in, n_out):
+    def __init__(self, t_X, n_in, n_out, w='zeros', rng=None, w_bound=1.):
         # Arguments:
         #   t_X: input data as a tensor
         #   n_in: number of input units
         #   n_out: number of output units
 
         # Weights: a matrix of size n_in x n_out
-        self.W = theano.shared(np.zeros((n_in, n_out), dtype=theano.config.floatX), borrow=True)
+        if w == 'random':
+            self.W = theano.shared(np.asarray(rng.uniform(size=(n_in, n_out), low=-w_bound, high=w_bound), dtype=theano.config.floatX), borrow=True)
+        else:
+            self.W = theano.shared(np.zeros((n_in, n_out), dtype=theano.config.floatX), borrow=True)
         # Bias: a vector of size n_out
         self.b = theano.shared(np.zeros((n_out), dtype=theano.config.floatX), borrow=True)
         # List of parameters
