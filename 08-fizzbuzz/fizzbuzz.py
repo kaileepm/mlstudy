@@ -18,8 +18,8 @@ if __name__ == '__main__':
 class MyData(object):
     def __init__(self):
         n_i_begin = 100
-        n_bits = 10
-        n_data = (1 << n_bits) - n_i_begin
+        n_bits = 12
+        n_data = (1 << 10) - n_i_begin
         n_class = 4
 
         # data_X: matrix with shape (n_data, n_bits)
@@ -29,10 +29,9 @@ class MyData(object):
 
         # build X, y
         i = 0
-        for idx in range(n_i_begin, 1 << n_bits):
-            for j in range(n_bits):
-                data_X[i][j] = (i >> j) & 1
-            data_y[i] = self.fizzbuzz(i)
+        for idx in range(n_i_begin, n_i_begin + n_data):
+            data_X[i] = self.bit_encode(idx, n_bits)
+            data_y[i] = self.fizzbuzz(idx)
             i += 1
 
         # create shared tensors of (X, y)
@@ -48,12 +47,20 @@ class MyData(object):
         self.n_class = n_class
 
         # test data
-        self.test_data_X = np.zeros((100, n_bits), dtype=theano.config.floatX)
-        self.test_data_y = np.zeros((100,), dtype=theano.config.floatX)
-        for i in range(100):
-            for j in range(n_bits):
-                self.test_data_X[i][j] = (i >> j) & 1
+        self.n_test_data = 256
+        self.test_data_X = np.zeros((self.n_test_data, n_bits), dtype=theano.config.floatX)
+        self.test_data_y = np.zeros((self.n_test_data,), dtype=theano.config.floatX)
+        for i in range(self.n_test_data):
+            self.test_data_X[i] = self.bit_encode(i, n_bits)
             self.test_data_y[i] = self.fizzbuzz(i)
+
+    def bit_encode(self, i, bits):
+        bit_list = []
+        bit_mask = 1
+        for j in range(bits):
+            bit_list.append(1 if (i & bit_mask) != 0 else 0)
+            bit_mask <<= 1
+        return bit_list
 
     def fizzbuzz(self, i):
         if i % 15 == 0:
@@ -80,7 +87,7 @@ class MyLearn(object):
         layer2 = NeuralNetworkLayer(rng, layer1.output, 256, 256, T.nnet.relu)
         layer3 = LogisticRegressionMultiClass(layer2.output, 256, data.n_class)
 
-        # create training model
+        # training model
         cost = layer3.negative_log_likelihood(t_y)
         params = layer3.params + layer2.params + layer1.params
         grads = T.grad(cost, params)
@@ -156,7 +163,7 @@ def main():
     print("Creating data")
     data = MyData()
 
-    print("Creating NN")
+    print("Creating a neural network")
     mml = MyLearn()
     mml.build_model(data)
 
@@ -168,17 +175,36 @@ def main():
     print("Validating...")
     mml.validate()
 
-    print("Test...")
+    print("Test low numbers...")
     y = mml.predict(data.test_data_X)
 
     fizzbuzz = [ "", "fizz", "buzz", "fizzbuzz" ]
     wrong = 0
-    for i in range(100):
+    for i in range(data.n_test_data):
         print("{}: {} {}".format(i, i if y[i] == 0 else fizzbuzz[y[i]], "WRONG" if y[i] != data.test_data_y[i] else ""))
         if y[i] != data.test_data_y[i]:
             wrong += 1
 
     print("Got {} wrong answers.".format(wrong))
+
+    if True:
+        print("Test high numbers...")
+        i_begin = 1024
+        i_end = 4096
+        i_count = i_end - i_begin
+
+        test_X = np.zeros((i_count, data.n_bits), dtype=theano.config.floatX)
+        test_y = np.zeros((i_count, ), dtype=theano.config.floatX)
+        for i in range(i_begin, i_end):
+            test_X[i - i_begin] = data.bit_encode(i, data.n_bits)
+            test_y[i - i_begin] = data.fizzbuzz(i)
+            y = mml.predict(test_X)
+
+        wrong = 0
+        for i in range(i_begin, i_end):
+            if y[i - i_begin] != test_y[i - i_begin]:
+                wrong += 1
+        print("Got {} wrong answers.".format(wrong))
 
 if __name__ == "__main__":
     main()
